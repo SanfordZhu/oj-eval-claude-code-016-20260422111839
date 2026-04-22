@@ -78,14 +78,17 @@ struct ValueList {
     }
 
     bool remove(int val) {
-        int lo = 0, hi = count;
-        while (lo < hi) {
-            int mid = (lo + hi) / 2;
-            if (values[mid] < val) lo = mid + 1;
-            else hi = mid;
+        int pos = -1;
+        for (int i = 0; i < count; i++) {
+            if (values[i] == val) {
+                pos = i;
+                break;
+            }
         }
-        if (lo >= count || values[lo] != val) return false;
-        for (int i = lo; i < count - 1; i++) values[i] = values[i+1];
+        if (pos == -1) return false;
+        for (int i = pos; i < count - 1; i++) {
+            values[i] = values[i+1];
+        }
         count--;
         return true;
     }
@@ -116,30 +119,32 @@ private:
     Meta meta;
     string data_filename;
     string meta_filename;
+    fstream data_file;
+    fstream meta_file;
 
     void init_files() {
         meta.root_offset = -1;
         meta.next_offset = 0;
         meta.node_count = 0;
 
-        ofstream meta_file(meta_filename, ios::binary);
+        meta_file.open(meta_filename, ios::binary | ios::out);
         meta_file.write((char*)&meta, sizeof(Meta));
         meta_file.close();
 
-        ofstream data_file(data_filename, ios::binary);
+        data_file.open(data_filename, ios::binary | ios::out);
         data_file.close();
     }
 
     void load_meta() {
-        ifstream meta_file(meta_filename, ios::binary);
+        meta_file.open(meta_filename, ios::binary | ios::in);
         meta_file.read((char*)&meta, sizeof(Meta));
         meta_file.close();
     }
 
     void save_meta() {
-        ofstream meta_file(meta_filename, ios::binary);
+        meta_file.seekp(0);
         meta_file.write((char*)&meta, sizeof(Meta));
-        meta_file.close();
+        meta_file.flush();
     }
 
     int64_t alloc_node() {
@@ -151,18 +156,15 @@ private:
     }
 
     void write_node(int64_t offset, const Node& node) {
-        fstream file(data_filename, ios::binary | ios::in | ios::out);
-        file.seekp(offset);
-        file.write((char*)&node, sizeof(Node));
-        file.close();
+        data_file.seekp(offset);
+        data_file.write((char*)&node, sizeof(Node));
+        data_file.flush();
     }
 
     Node read_node(int64_t offset) {
         Node node;
-        ifstream file(data_filename, ios::binary);
-        file.seekg(offset);
-        file.read((char*)&node, sizeof(Node));
-        file.close();
+        data_file.seekg(offset);
+        data_file.read((char*)&node, sizeof(Node));
         return node;
     }
 
@@ -275,11 +277,20 @@ public:
         } else {
             load_meta();
         }
+
+        data_file.open(data_filename, ios::binary | ios::in | ios::out);
+        meta_file.open(meta_filename, ios::binary | ios::in | ios::out);
     }
 
-    bool file_exists(const string& filename) {
-        struct stat buffer;
-        return (stat(filename.c_str(), &buffer) == 0);
+    ~BPTree() {
+        if (data_file.is_open()) {
+            data_file.flush();
+            data_file.close();
+        }
+        if (meta_file.is_open()) {
+            meta_file.flush();
+            meta_file.close();
+        }
     }
 
     void insert(const string& key_str, int value) {
