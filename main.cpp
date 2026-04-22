@@ -102,6 +102,9 @@ struct Node {
 
     Node() : type(LEAF), key_count(0) {
         memset(children, 0, sizeof(children));
+        for (int i = 0; i < ORDER; i++) {
+            values[i] = ValueList();
+        }
     }
 
     bool isLeaf() const { return type == LEAF; }
@@ -247,7 +250,6 @@ private:
             i--;
         }
         node.keys[i + 1] = key;
-        // Reset the ValueList at the new position before inserting
         node.values[i + 1] = ValueList();
         node.values[i + 1].insert(value);
         node.key_count++;
@@ -264,8 +266,9 @@ private:
 public:
     BPTree(const string& data_fn = DATA_FILE, const string& meta_fn = META_FILE)
         : data_filename(data_fn), meta_filename(meta_fn) {
-        bool data_exists = file_exists(data_filename);
-        bool meta_exists = file_exists(meta_filename);
+        struct stat statbuf;
+        bool data_exists = (stat(data_filename.c_str(), &statbuf) == 0);
+        bool meta_exists = (stat(meta_filename.c_str(), &statbuf) == 0);
 
         if (!data_exists || !meta_exists) {
             init_files();
@@ -354,7 +357,7 @@ public:
             auto [new_parent_offset, split_key] = split_internal(parent_offset);
             parent = read_node(parent_offset);
 
-            int parent_idx = indices[indices.size() - 1];
+            int parent_idx = indices.empty() ? 0 : indices[indices.size() - 1];
             if (parent_idx < parent.key_count) {
                 insert_into_internal(parent, key, right);
                 write_node(parent_offset, parent);
@@ -365,7 +368,7 @@ public:
             }
 
             insert_split_key(vector<int64_t>(path.begin(), path.end() - 1),
-                             vector<int>(indices.begin(), indices.end() - 1),
+                             vector<int>(indices.begin(), indices.empty() ? indices.end() : indices.end() - 1),
                              parent_offset, new_parent_offset, split_key);
         } else {
             insert_into_internal(parent, key, right);
